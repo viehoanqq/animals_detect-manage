@@ -1,3 +1,5 @@
+import os
+import sys
 import customtkinter as ctk
 from tkinter import messagebox
 from PIL import Image
@@ -10,7 +12,10 @@ class AccountManagement:
         self.user_id = user_id
         self.controller = AccountController(user_id)
         self.setup_ui()
-
+    def resource_path(self,relative_path):
+        """Trả về đường dẫn tuyệt đối đến tài nguyên, hoạt động với cả script và .exe"""
+        base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
+        return os.path.join(base_path, relative_path)
     def setup_ui(self):
         """Thiết lập giao diện người dùng cho quản lý thông tin tài khoản"""
         ctk.set_appearance_mode("light")
@@ -34,8 +39,8 @@ class AccountManagement:
 
         # Logo tròn
         try:
-            logo_img = ctk.CTkImage(light_image=Image.open("img/banner.png"),
-                                   dark_image=Image.open("img/banner.png"),
+            logo_img = ctk.CTkImage(light_image=Image.open(self.resource_path("img/avatar-icon.png")),
+                                   dark_image=Image.open(self.resource_path("img/avatar-icon.png")),
                                    size=(90, 90))
             ctk.CTkLabel(logo_frame, image=logo_img, text="").place(relx=0.5, rely=0.5, anchor="center")
         except FileNotFoundError:
@@ -50,7 +55,7 @@ class AccountManagement:
 
         # Chuyển đổi giới tính và vai trò
         gender_display = {"MALE": "Nam", "FEMALE": "Nữ"}.get(user_info.get("gender", ""), user_info.get("gender", ""))
-        role_display = {"ADMIN": "Quản trị viên", "USER": "Người dùng"}.get(user_info.get("role", ""), user_info.get("role", ""))
+        role_display = {"admin": "Quản trị viên", "employee": "Người dùng"}.get(user_info.get("role", ""), user_info.get("role", ""))
 
         # Frame chứa các trường nhập
         fields_frame = ctk.CTkFrame(main_frame, corner_radius=10, fg_color="#ffffff")
@@ -66,7 +71,7 @@ class AccountManagement:
             ("Năm sinh", "birth_year", False),
             ("Số điện thoại", "phone_number", False),
             ("Email", "email", False),
-            ("Vai trò", "role", False, role_display),
+            ("Vai trò", "role", True, role_display),
             ("Ngày tham gia", "joined_date", True),
         ]
 

@@ -2,6 +2,7 @@ import os
 import sys
 import customtkinter as ctk
 from tkinter import ttk
+from tkinter import filedialog
 from PIL import Image
 import cv2
 import numpy as np
@@ -12,7 +13,7 @@ from controller.animals_controller import AnimalsController
 from controller.work_shifts_controller import WorkShiftsController
 from datetime import datetime
 
-class AnimalCounter:
+class AnimalCounter2:
     def __init__(self, parent_frame, user_id):
         self.parent_frame = parent_frame
         self.user_id = user_id
@@ -23,12 +24,6 @@ class AnimalCounter:
         self.cow_count = 0
         self.pig_count = 0
         self.recognition_ratio = "N/A"
-        self.cap = None  # Webcam capture object
-        self.webcam_running = False  # Flag to control webcam loop
-        self.tracks = {}  # Dictionary to store tracks of center points (ID -> list of (x, y))
-        self.previous_centers = {}  # Store previous frame centers for tracking
-        self.crossed_ids = set()  # Track IDs that have already crossed the line
-        self.detected_count = 0  # Total detected count for animals crossing the line
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
         self.setup_data()
@@ -64,7 +59,7 @@ class AnimalCounter:
         # Title
         ctk.CTkLabel(
             self.header_frame,
-            text="Nhận diện và Lưu Ca Làm Việc (Webcam)",
+            text="Nhận diện và Lưu Ca Làm Việc",
             font=("Arial", 26, "bold"),
             text_color="#1a5f7a"
         ).pack(side="left", padx=15, pady=10)
@@ -78,7 +73,7 @@ class AnimalCounter:
         self.left_frame.pack(side="left", fill="y", padx=(0, 15), pady=10, ipadx=15, ipady=15)
         self.left_frame.pack_propagate(False)
 
-        # Right frame (video and results)
+        # Right frame (image and results)
         self.right_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         self.right_frame.pack(side="right", fill="both", expand=True, padx=(15, 0), pady=10)
 
@@ -116,37 +111,7 @@ class AnimalCounter:
         self.buttons_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
         self.buttons_frame.pack(pady=(20, 10), padx=15, fill="x")
 
-        # Action buttons
-        self.start_button = ctk.CTkButton(
-            self.buttons_frame,
-            text="Bắt đầu webcam",
-            command=self.start_webcam,
-            fg_color="#1a5f7a",
-            hover_color="#134b60",
-            width=120,
-            height=36,
-            font=("Arial", 14, "bold"),
-            corner_radius=8,
-            border_width=1,
-            border_color="#134b60"
-        )
-        self.start_button.pack(side="left", padx=5)
-
-        self.stop_button = ctk.CTkButton(
-            self.buttons_frame,
-            text="Dừng webcam",
-            command=self.stop_webcam,
-            fg_color="#dc3545",
-            hover_color="#c82333",
-            width=120,
-            height=36,
-            font=("Arial", 14, "bold"),
-            corner_radius=8,
-            border_width=1,
-            border_color="#bd2130"
-        )
-        self.stop_button.pack(side="left", padx=5)
-
+        # Action buttons (only Save button)
         self.save_button = ctk.CTkButton(
             self.buttons_frame,
             text="Lưu ca",
@@ -160,9 +125,9 @@ class AnimalCounter:
             border_width=1,
             border_color="#117a8b"
         )
-        self.save_button.pack(side="left", padx=5)
+        self.save_button.pack(padx=5)
 
-        # Right frame: Video and results
+        # Right frame: Image and results
         self.image_frame = ctk.CTkFrame(self.right_frame, fg_color="#ffffff", corner_radius=10, border_width=1, border_color="#e9ecef")
         self.image_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -177,16 +142,17 @@ class AnimalCounter:
             text_color="#343a40"
         ).pack(side="left", padx=10)
 
-        # Video display
+        # Image display
         self.image_label = ctk.CTkLabel(
             self.image_frame,
-            text="Chưa có video từ webcam",
+            text="Nhấp để tải ảnh lên",
             font=("Arial", 16),
             text_color="#343a40",
             fg_color="#f0f0f0",
             corner_radius=8
         )
         self.image_label.pack(fill="both", expand=True, padx=10, pady=10)
+        self.image_label.bind("<Button-1>", lambda event: self.upload_image())
 
         # Result label
         self.result_label = ctk.CTkLabel(
@@ -197,70 +163,33 @@ class AnimalCounter:
         )
         self.result_label.pack(pady=10)
 
-    def start_webcam(self):
-        if self.webcam_running:
+    def update_shift_date(self, shift_selection):
+        if shift_selection == "Tạo ca mới":
+            self.shift_date_entry.delete(0, "end")
+            self.shift_date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        else:
+            shift_id = self.shift_id_map.get(shift_selection)
+            shift = next((s for s in self.shifts if s['id'] == shift_id), None)
+            if shift and shift['date']:
+                self.shift_date_entry.delete(0, "end")
+                self.shift_date_entry.insert(0, shift['date'].strftime("%Y-%m-%d"))
+
+    def upload_image(self):
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp")]
+        )
+        if not file_path:
             return
 
         try:
-            self.cap = cv2.VideoCapture(0)  # Access default webcam (ID 0)
-            if not self.cap.isOpened():
-                raise Exception("Không thể mở webcam")
+            image = cv2.imread(file_path)
+            if image is None:
+                raise Exception("Không thể đọc ảnh")
 
-            self.webcam_running = True
-            self.tracks = {}
-            self.previous_centers = {}
-            self.crossed_ids = set()
-            self.detected_count = 0
-            self.cow_count = 0
-            self.pig_count = 0
-            self.update_frame()
-
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi khi mở webcam: {str(e)}")
-            self.webcam_running = False
-            if self.cap:
-                self.cap.release()
-
-    def stop_webcam(self):
-        self.webcam_running = False
-        if self.cap:
-            self.cap.release()
-            self.cap = None
-        self.image_label.configure(image=None, text="Chưa có video từ webcam")
-        self.cow_count = 0
-        self.pig_count = 0
-        self.detected_count = 0
-        self.tracks = {}
-        self.previous_centers = {}
-        self.crossed_ids = set()
-        self.result_label.configure(text="Số lượng phát hiện: 0 bò, 0 heo / Số lượng trong bầy: 0")
-        self.quantity_entry.delete(0, "end")
-
-    def update_frame(self):
-        if not self.webcam_running:
-            return
-
-        try:
-            ret, frame = self.cap.read()
-            if not ret:
-                raise Exception("Không thể đọc khung hình từ webcam")
-
-            # Get frame dimensions
-            height, width = frame.shape[:2]
-            mid_line_y = height // 2
-
-            # Draw the middle line
-            cv2.line(frame, (0, mid_line_y), (width, mid_line_y), (255, 255, 0), 2)
-
-            # Process frame with YOLO
-            results = self.model(frame, conf=0.5)  # Only take boxes with confidence > 50%
+            results = self.model(image, conf=0.2)
             self.cow_count = 0
             self.pig_count = 0
             confidence_scores = []
-
-            # Current frame centers for tracking
-            current_centers = []
-            current_boxes = []
 
             for result in results:
                 for box in result.boxes:
@@ -268,93 +197,34 @@ class AnimalCounter:
                     confidence = float(box.conf)
                     confidence_scores.append(confidence)
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
-                    center_x = (x1 + x2) // 2
-                    center_y = (y1 + y2) // 2
-                    current_centers.append((center_x, center_y))
-                    current_boxes.append((x1, y1, x2, y2, class_name, confidence))
+                    label = f"{class_name.upper()}: {confidence:.2f}"
 
                     if class_name == "cow":
                         self.cow_count += 1
+                        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        cv2.putText(
+                            image,
+                            label,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (0, 255, 0),
+                            2,
+                            cv2.LINE_AA
+                        )
                     elif class_name == "pig":
                         self.pig_count += 1
-
-            # Simple tracking: Match current centers to previous centers
-            new_tracks = {}
-            next_id = max(self.tracks.keys(), default=0) + 1 if self.tracks else 0
-
-            for i, (center_x, center_y) in enumerate(current_centers):
-                x1, y1, x2, y2, class_name, confidence = current_boxes[i]
-                label = f"{class_name.upper()}: {confidence:.2f}"
-
-                # Find the closest previous center
-                matched_id = None
-                min_dist = float('inf')
-                for track_id, prev_center in self.previous_centers.items():
-                    dist = ((center_x - prev_center[0]) ** 2 + (center_y - prev_center[1]) ** 2) ** 0.5
-                    if dist < min_dist and dist < 50:  # Threshold for matching
-                        min_dist = dist
-                        matched_id = track_id
-
-                if matched_id is None:
-                    matched_id = next_id
-                    next_id += 1
-
-                # Update track
-                if matched_id not in self.tracks:
-                    self.tracks[matched_id] = []
-                self.tracks[matched_id].append((center_x, center_y))
-                new_tracks[matched_id] = (center_x, center_y)
-
-                # Draw box and label
-                if class_name == "cow":
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.putText(
-                        frame,
-                        label,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 255, 0),
-                        2,
-                        cv2.LINE_AA
-                    )
-                elif class_name == "pig":
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(
-                        frame,
-                        label,
-                        (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 0, 255),
-                        2,
-                        cv2.LINE_AA
-                    )
-
-                # Draw center point
-                cv2.circle(frame, (center_x, center_y), 5, (255, 0, 0), -1)
-
-                # Draw track (path of center point)
-                if len(self.tracks[matched_id]) > 1:
-                    for j in range(len(self.tracks[matched_id]) - 1):
-                        pt1 = self.tracks[matched_id][j]
-                        pt2 = self.tracks[matched_id][j + 1]
-                        cv2.line(frame, pt1, pt2, (255, 165, 0), 2)
-
-                # Check if the center point crosses the middle line (from top to bottom)
-                if matched_id not in self.crossed_ids:
-                    if matched_id in self.previous_centers:
-                        prev_y = self.previous_centers[matched_id][1]
-                        if prev_y <= mid_line_y and center_y > mid_line_y:  # Top to bottom
-                            self.detected_count += 1
-                            self.crossed_ids.add(matched_id)
-
-            # Update previous centers
-            self.previous_centers = new_tracks
-
-            # Clean up old tracks
-            active_ids = set(new_tracks.keys())
-            self.tracks = {track_id: points for track_id, points in self.tracks.items() if track_id in active_ids}
+                        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                        cv2.putText(
+                            image,
+                            label,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (0, 0, 255),
+                            2,
+                            cv2.LINE_AA
+                        )
 
             self.recognition_ratio = f"{sum(confidence_scores) / len(confidence_scores):.4f}" if confidence_scores else "N/A"
 
@@ -368,43 +238,27 @@ class AnimalCounter:
                     batch_quantity = batch['quantity']
                     species = batch['species'].lower()
 
-            # Update detected count in quantity entry
+            detected_count = self.cow_count if species == "cow" else self.pig_count if species == "pig" else 0
             self.quantity_entry.delete(0, "end")
-            self.quantity_entry.insert(0, str(self.detected_count))
+            self.quantity_entry.insert(0, str(detected_count))
             result_text = f"Số lượng phát hiện: {self.cow_count} bò, {self.pig_count} heo / Số lượng trong bầy: {batch_quantity}"
             self.result_label.configure(text=result_text)
 
-            # Convert frame to CTkImage for display
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_image = Image.fromarray(frame_rgb)
-            max_size = (800, 600)
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            pil_image = Image.fromarray(image_rgb)
+            max_size = (600, 430)
             pil_image.thumbnail(max_size, Image.Resampling.LANCZOS)
 
             ctk_image = ctk.CTkImage(light_image=pil_image, size=pil_image.size)
             self.image_label.configure(image=ctk_image, text="")
             self.image_label.image = ctk_image
 
-            # Schedule the next frame update
-            if self.webcam_running:
-                self.image_label.after(30, self.update_frame)  # Update every 30ms (~33 FPS)
-
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi khi xử lý khung hình: {str(e)}")
-            self.stop_webcam()
-
-    def update_shift_date(self, shift_selection):
-        if shift_selection == "Tạo ca mới":
-            self.shift_date_entry.delete(0, "end")
-            self.shift_date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
-        else:
-            shift_id = self.shift_id_map.get(shift_selection)
-            shift = next((s for s in self.shifts if s['id'] == shift_id), None)
-            if shift and shift['date']:
-                self.shift_date_entry.delete(0, "end")
-                self.shift_date_entry.insert(0, shift['date'].strftime("%Y-%m-%d"))
+            messagebox.showerror("Lỗi", f"Lỗi khi xử lý ảnh: {str(e)}")
+            self.recognition_ratio = "N/A"
 
     def save_shift(self):
-        if self.detected_count == 0:
+        if self.cow_count == 0 and self.pig_count == 0:
             messagebox.showwarning("Cảnh báo", "Chưa có kết quả nhận diện để lưu!")
             return
 
@@ -453,10 +307,10 @@ class AnimalCounter:
             self.work_shifts_controller.add_shift_details(shift_id, barn_id, quantity)
             messagebox.showinfo("Thành công", f"Đã lưu chi tiết nhận diện cho ca làm việc ID {shift_id}!")
             self.quantity_entry.delete(0, "end")
-            self.stop_webcam()
+            self.image_label.configure(image=None, text="Nhấp để tải ảnh lên")
+            self.result_label.configure(text="Số lượng phát hiện: 0 bò, 0 heo / Số lượng trong bầy: 0")
             self.cow_count = 0
             self.pig_count = 0
-            self.detected_count = 0
             self.recognition_ratio = "N/A"
 
             self.setup_data()
@@ -468,6 +322,5 @@ class AnimalCounter:
             messagebox.showerror("Lỗi", f"Lỗi khi lưu ca làm việc: {str(e)}")
 
     def destroy(self):
-        self.stop_webcam()  # Ensure webcam is stopped before destroying
         if hasattr(self, 'main_frame'):
             self.main_frame.destroy()

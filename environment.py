@@ -3,8 +3,9 @@ from tkinter import messagebox
 from tkinter import ttk
 from controller.environment_controller import environment_controller
 from datetime import datetime
-import requests
-
+import schedule
+import time
+import threading
 
 class EnvironmentManagement:
     def __init__(self, parent):
@@ -14,32 +15,51 @@ class EnvironmentManagement:
         self.sort_column = "record_date"  # Default sort column
         self.sort_order = "desc"  # Default sort order
         self.setup_ui()
-        print(environment_controller.get_info_env())
+        self.start_scheduler()
 
     def setup_ui(self):
         """Thiết lập giao diện người dùng cho quản lý môi trường"""
-        main_frame = ctk.CTkFrame(self.parent) 
+        main_frame = ctk.CTkFrame(self.parent, fg_color="#f5f5f5")
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Tiêu đề
-        ctk.CTkLabel(main_frame, text="QUẢN LÝ MÔI TRƯỜNG", font=("Arial", 20, "bold"), text_color="#2e7a84").pack(pady=10)
+        ctk.CTkLabel(
+            main_frame,
+            text="QUẢN LÝ MÔI TRƯỜNG",
+            font=("Arial", 20, "bold"),
+            text_color="#2e7a84"
+        ).pack(pady=10)
 
         # Header frame for search and sort
-        header_frame = ctk.CTkFrame(main_frame)
+        header_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         header_frame.pack(fill="x", pady=5)
 
         # Search and sort controls
-        controls_frame = ctk.CTkFrame(header_frame)
+        controls_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
         controls_frame.pack(side="right", padx=10)
-        
-        lable_frame = ctk.CTkFrame(header_frame)
-        lable_frame.pack(side="left",padx= 5)
-        ctk.CTkLabel(lable_frame,text=""+environment_controller.get_info_env()[0], font=("Arial", 19, "bold"), text_color="#2e7a84").pack(padx=5)
-        ctk.CTkLabel(lable_frame,text="Trạng thái: "+environment_controller.get_info_env()[3],font=("Arial", 12, "bold"),text_color="#2e7a84").pack(padx=5)
-        
+
+        # Location and status labels
+        label_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        label_frame.pack(side="left", padx=5)
+        try:
+            env_info = self.controller.get_info_env()
+            ctk.CTkLabel(
+                label_frame,
+                text=env_info[0],
+                font=("Arial", 19, "bold"),
+                text_color="#2e7a84"
+            ).pack(padx=5)
+            ctk.CTkLabel(
+                label_frame,
+                text="Trạng thái: " + env_info[3],
+                font=("Arial", 12, "bold"),
+                text_color="#2e7a84"
+            ).pack(padx=5)
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Lỗi khi lấy thông tin môi trường: {str(e)}")
 
         # Search by date
-        search_frame = ctk.CTkFrame(controls_frame)
+        search_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
         search_frame.pack(side="left", padx=5)
         ctk.CTkLabel(search_frame, text="Tìm theo ngày:", font=("Arial", 12)).pack()
         self.search_entry = ctk.CTkEntry(search_frame, width=150, placeholder_text="YYYY-MM-DD")
@@ -47,11 +67,11 @@ class EnvironmentManagement:
         self.search_entry.bind("<KeyRelease>", self.search_by_date)
 
         # Sort options
-        sort_frame = ctk.CTkFrame(controls_frame)
+        sort_frame = ctk.CTkFrame(controls_frame, fg_color="transparent")
         sort_frame.pack(side="left", padx=5)
         ctk.CTkLabel(sort_frame, text="Sắp xếp:", font=("Arial", 12)).pack()
 
-        sort_subframe = ctk.CTkFrame(sort_frame)
+        sort_subframe = ctk.CTkFrame(sort_frame, fg_color="transparent")
         sort_subframe.pack(pady=5)
 
         # Combobox for column selection
@@ -73,7 +93,7 @@ class EnvironmentManagement:
         self.sort_order_combobox.pack(side="left", padx=2)
 
         # Input and button frame
-        input_frame = ctk.CTkFrame(main_frame)
+        input_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         input_frame.pack(fill="x", pady=10, padx=10)
 
         # Current date and time
@@ -85,16 +105,23 @@ class EnvironmentManagement:
         fields = [
             ("Ngày:", date_str, "date", True),
             ("Giờ:", time_str, "time", True),
-            ("Nhiệt độ (°C):", environment_controller.get_info_env()[1], "temperature", True),
-            ("Độ ẩm (%):", environment_controller.get_info_env()[2] , "humidity", True),
-            ("Lượng mưa (mm):", environment_controller.get_info_env()[4], "rainfall", True)
+            ("Nhiệt độ (°C):", "", "temperature", True),
+            ("Độ ẩm (%):", "", "humidity", True),
+            ("Lượng mưa (mm):", "", "rainfall", True)
         ]
 
         self.entries = {}
+        try:
+            env_info = self.controller.get_info_env()
+            fields[2] = ("Nhiệt độ (°C):", env_info[1], "temperature", True)
+            fields[3] = ("Độ ẩm (%):", env_info[2], "humidity", True)
+            fields[4] = ("Lượng mưa (mm):", env_info[4], "rainfall", True)
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Lỗi khi lấy thông tin môi trường: {str(e)}")
+
         for label_text, default_value, field, readonly in fields:
-            field_frame = ctk.CTkFrame(input_frame)
+            field_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
             field_frame.pack(side="left", padx=5)
-            
             ctk.CTkLabel(field_frame, text=label_text, font=("Arial", 12)).pack()
             entry = ctk.CTkEntry(field_frame, width=120)
             entry.insert(0, default_value)
@@ -104,7 +131,7 @@ class EnvironmentManagement:
             self.entries[field] = entry
 
         # Buttons frame
-        buttons_frame = ctk.CTkFrame(input_frame)
+        buttons_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
         buttons_frame.pack(side="left", padx=10)
 
         # Update button
@@ -128,16 +155,45 @@ class EnvironmentManagement:
         ).pack(pady=5)
 
         # Table frame
-        table_frame = ctk.CTkFrame(main_frame)
-        table_frame.pack(fill="both", expand=True, pady=10)
+        table_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        table_frame.pack(fill="both", expand=True, pady=10, padx=10)
 
-        # Create table
+        # Treeview styling
+        style = ttk.Style()
+        style.configure("Custom.Treeview",
+                        background="#ffffff",
+                        foreground="black",
+                        rowheight=32,
+                        fieldbackground="#ffffff",
+                        font=("Arial", 12))
+        style.configure("Custom.Treeview.Heading",
+                        background="#1a5f7a",
+                        foreground="black",
+                        font=("Arial", 13, "bold"),
+                        borderwidth=1,
+                        relief="flat")
+        style.map("Custom.Treeview",
+                  background=[('selected', 'black')],
+                  foreground=[('selected', 'white')])
+        style.map("Custom.Treeview.Heading",
+                  background=[('active', 'black')])
+
+        # Treeview setup
         columns = ("Ngày", "Giờ", "Nhiệt độ (°C)", "Độ ẩm (%)", "Lượng mưa (mm)")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", style="Custom.Treeview")
+        self.tree.pack(fill="both", expand=True, padx=10, pady=(5, 10))
+
+        # Set column headings and widths
+        column_widths = {
+            "Ngày": 120,
+            "Giờ": 100,
+            "Nhiệt độ (°C)": 100,
+            "Độ ẩm (%)": 100,
+            "Lượng mưa (mm)": 100
+        }
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=150)
-        self.tree.pack(fill="both", expand=True)
+            self.tree.column(col, width=column_widths.get(col, 100), anchor="center")
 
         # Scrollbar
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
@@ -146,6 +202,34 @@ class EnvironmentManagement:
 
         # Load existing data
         self.load_environment_data()
+
+    def start_scheduler(self):
+        """Khởi động scheduler để tự động cập nhật thời tiết lúc 12:00 PM hàng ngày"""
+        def run_scheduler():
+            schedule.every().day.at("12:00").do(self.auto_update_weather)
+            while True:
+                schedule.run_pending()
+                time.sleep(60)  # Check every minute
+
+        # Run scheduler in a separate thread
+        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+        scheduler_thread.start()
+
+    def auto_update_weather(self):
+        """Tự động cập nhật dữ liệu thời tiết lúc 12:00 PM"""
+        try:
+            env_info = self.controller.get_info_env()
+            current_time = datetime.now()
+            record_date = current_time.strftime("%Y-%m-%d")
+            record_time = current_time.strftime("%H:%M:%S")
+            temperature = float(env_info[1])
+            humidity = float(env_info[2])
+            rainfall = float(env_info[4])
+
+            self.controller.add_enviroment(record_date, record_time, temperature, humidity, rainfall)
+            self.load_environment_data()
+        except Exception as e:
+            print(f"Lỗi khi tự động cập nhật thời tiết: {str(e)}")
 
     def load_environment_data(self, data=None):
         """Tải danh sách dữ liệu môi trường vào bảng"""
@@ -207,28 +291,32 @@ class EnvironmentManagement:
             humidity = float(self.entries["humidity"].get())
             rainfall = float(self.entries["rainfall"].get())
 
-            if not all([record_date, record_time, self.entries["temperature"].get(), 
+            if not all([record_date, record_time, self.entries["temperature"].get(),
                        self.entries["humidity"].get(), self.entries["rainfall"].get()]):
                 messagebox.showerror("Lỗi", "Vui lòng điền đầy đủ thông tin!")
                 return
 
             self.controller.add_enviroment(record_date, record_time, temperature, humidity, rainfall)
             self.load_environment_data()
-            
+
             # Reset input fields (keep date and time as current)
             current_time = datetime.now()
             self.entries["date"].configure(state="normal")
             self.entries["date"].delete(0, "end")
             self.entries["date"].insert(0, current_time.strftime("%Y-%m-%d"))
             self.entries["date"].configure(state="readonly")
-            
+
             self.entries["time"].configure(state="normal")
             self.entries["time"].delete(0, "end")
             self.entries["time"].insert(0, current_time.strftime("%H:%M:%S"))
             self.entries["time"].configure(state="readonly")
-            
-            for field in ["temperature", "humidity", "rainfall"]:
+
+            env_info = self.controller.get_info_env()
+            for field, value in [("temperature", env_info[1]), ("humidity", env_info[2]), ("rainfall", env_info[4])]:
+                self.entries[field].configure(state="normal")
                 self.entries[field].delete(0, "end")
+                self.entries[field].insert(0, value)
+                self.entries[field].configure(state="readonly")
 
             messagebox.showinfo("Thành công", "Đã cập nhật dữ liệu môi trường!")
 

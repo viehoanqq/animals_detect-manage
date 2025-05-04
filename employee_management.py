@@ -5,36 +5,58 @@ from datetime import datetime
 import mysql.connector
 from mysql.connector import Error
 import os
+import uuid
 
 class EmployeeManagement:
     def __init__(self, parent_frame):
         self.parent_frame = parent_frame
+        ctk.set_appearance_mode("light")
+        ctk.set_default_color_theme("blue")
         self.setup_ui()
         self.load_employees()
 
     def setup_ui(self):
-        # Main title
+        # Main container
+        self.main_frame = ctk.CTkFrame(self.parent_frame, fg_color="#ffffff", corner_radius=12)
+        self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Header frame
+        self.header_frame = ctk.CTkFrame(self.main_frame, fg_color="#ffffff", corner_radius=8)
+        self.header_frame.pack(fill="x", padx=10, pady=(5, 10))
+
+        # Title
         ctk.CTkLabel(
-            self.parent_frame,
+            self.header_frame,
             text="Quản lý nhân viên",
-            font=("Arial", 22, "bold"),
-            text_color="#2e7a84"
-        ).pack(pady=20)
+            font=("Arial", 26, "bold"),
+            text_color="#1a5f7a"
+        ).pack(side="left", padx=15, pady=5)
 
-        # Employee controls frame (input fields)
-        self.controls_frame = ctk.CTkFrame(self.parent_frame, fg_color="transparent")
-        self.controls_frame.pack(pady=10, padx=10, fill="x")
+        # Content frame (split layout)
+        self.content_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.content_frame.pack(fill="both", expand=True)
 
-        # Input fields
-        self.first_name_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12))
-        self.last_name_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12))
-        self.gender_combo = ctk.CTkComboBox(self.controls_frame, values=["MALE", "FEMALE"], width=100, font=("Arial", 12))
-        self.birth_year_entry = ctk.CTkEntry(self.controls_frame, width=100, font=("Arial", 12))
-        self.phone_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12))
-        self.email_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12))
-        self.role_combo = ctk.CTkComboBox(self.controls_frame, values=["Employee", "Admin"], width=150, font=("Arial", 12))
-        self.username_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12))
-        self.password_entry = ctk.CTkEntry(self.controls_frame, width=150, font=("Arial", 12), show="*")
+        # Left frame (inputs and buttons) - fixed width and height
+        self.left_frame = ctk.CTkFrame(self.content_frame, fg_color="#f8f9fa", corner_radius=10, border_width=1, border_color="#e9ecef", width=500, height=600)
+        self.left_frame.pack(side="left", fill="y", padx=(0, 10), pady=5)
+        self.left_frame.pack_propagate(False)
+
+        # Right frame (employee list)
+        self.right_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.right_frame.pack(side="right", fill="both", expand=True, padx=(10, 0), pady=5)
+
+        # Input fields frame
+        self.inputs_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.inputs_frame.pack(pady=10, padx=10, fill="x")
+
+        # Input fields configuration
+        self.first_name_entry = ctk.CTkEntry(self.inputs_frame, width=220, font=("Arial", 13), placeholder_text="Tên", corner_radius=6)
+        self.last_name_entry = ctk.CTkEntry(self.inputs_frame, width=220, font=("Arial", 13), placeholder_text="Họ", corner_radius=6)
+        self.gender_combo = ctk.CTkComboBox(self.inputs_frame, values=["MALE", "FEMALE"], width=220, font=("Arial", 13), corner_radius=6)
+        self.birth_year_entry = ctk.CTkEntry(self.inputs_frame, width=220, font=("Arial", 13), placeholder_text="Năm sinh", corner_radius=6)
+        self.phone_entry = ctk.CTkEntry(self.inputs_frame, width=220, font=("Arial", 13), placeholder_text="SĐT", corner_radius=6)
+        self.email_entry = ctk.CTkEntry(self.inputs_frame, width=220, font=("Arial", 13), placeholder_text="Email", corner_radius=6)
+        self.role_combo = ctk.CTkComboBox(self.inputs_frame, values=["Employee", "Admin"], width=220, font=("Arial", 13), corner_radius=6)
 
         input_fields = [
             ("Tên:", self.first_name_entry),
@@ -44,106 +66,170 @@ class EmployeeManagement:
             ("SĐT:", self.phone_entry),
             ("Email:", self.email_entry),
             ("Vai trò:", self.role_combo),
-            ("Tên đăng nhập:", self.username_entry),
-            ("Mật khẩu:", self.password_entry)
         ]
 
-        for label_text, widget in input_fields:
-            ctk.CTkLabel(self.controls_frame, text=label_text, font=("Arial", 16)).pack(side="left", padx=5)
-            widget.pack(side="left", padx=5)
+        # Grid layout for label:entry
+        for i, (label_text, widget) in enumerate(input_fields):
+            label = ctk.CTkLabel(self.inputs_frame, text=f"{label_text}", font=("Arial", 14, "bold"), text_color="#343a40", width=80)
+            label.grid(row=i, column=0, padx=(5, 0), pady=3, sticky="w")
+            widget.grid(row=i, column=1, padx=(0, 5), pady=3, sticky="ew")
+        self.inputs_frame.grid_columnconfigure(1, weight=1)
 
-        # Approval and action buttons frame
-        self.actions_frame = ctk.CTkFrame(self.parent_frame, fg_color="transparent")
-        self.actions_frame.pack(pady=10, padx=10, fill="x")
+        # Buttons frame
+        self.buttons_frame = ctk.CTkFrame(self.left_frame, fg_color="transparent")
+        self.buttons_frame.pack(pady=10, padx=10, fill="x")
 
-        # Approval section (left)
-        self.approval_subframe = ctk.CTkFrame(self.actions_frame, fg_color="transparent")
-        self.approval_subframe.pack(side="left")
-
-        ctk.CTkLabel(
-            self.approval_subframe,
-            text="Duyệt tài khoản:",
-            font=("Arial", 16),
-            text_color="#333333"
-        ).pack(side="left", padx=5)
-
+        # Approval buttons
         self.approve_button = ctk.CTkButton(
-            self.approval_subframe,
-            text="Duyệt",
+            self.buttons_frame,
+            text="Kích hoạt",
             command=self.approve_account,
-            fg_color="#2e7a84",
-            hover_color="#256b73",
+            fg_color="#1a5f7a",
+            hover_color="#134b60",
             width=100,
-            height=35,
-            font=("Arial", 13)
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
         )
-        self.approve_button.pack(side="left", padx=5)
+        self.approve_button.pack(side="left", padx=3)
 
         self.reject_button = ctk.CTkButton(
-            self.approval_subframe,
-            text="Từ chối",
+            self.buttons_frame,
+            text="Khóa tài khoản",
             command=self.reject_account,
-            fg_color="#db4437",
-            hover_color="#c13b31",
+            fg_color="#dc3545",
+            hover_color="#c82333",
             width=100,
-            height=35,
-            font=("Arial", 13)
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
+            border_color="#bd2130"
         )
-        self.reject_button.pack(side="left", padx=5)
+        self.reject_button.pack(side="left", padx=3)
 
-        # Action buttons (right)
-        self.buttons_subframe = ctk.CTkFrame(self.actions_frame, fg_color="transparent")
-        self.buttons_subframe.pack(side="right")
-
-        self.add_button = ctk.CTkButton(
-            self.buttons_subframe,
-            text="Thêm nhân viên",
-            command=self.add_employee,
-            fg_color="#2e7a84",
-            hover_color="#256b73",
-            width=150,
-            height=35,
-            font=("Arial", 13)
-        )
-        self.add_button.pack(side="left", padx=5)
-
+        # Action buttons
         self.update_button = ctk.CTkButton(
-            self.buttons_subframe,
+            self.buttons_frame,
             text="Cập nhật",
             command=self.update_employee,
-            fg_color="#2e7a84",
-            hover_color="#256b73",
-            width=150,
-            height=35,
-            font=("Arial", 13)
+            fg_color="#17a2b8",
+            hover_color="#138496",
+            width=100,
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
+            border_color="#117a8b"
         )
-        self.update_button.pack(side="left", padx=5)
+        self.update_button.pack(side="left", padx=3)
 
         self.delete_button = ctk.CTkButton(
-            self.buttons_subframe,
+            self.buttons_frame,
             text="Xóa",
             command=self.delete_employee,
-            fg_color="#db4437",
-            hover_color="#c13b31",
-            width=150,
-            height=35,
-            font=("Arial", 13)
+            fg_color="#6c757d",
+            hover_color="#5a6268",
+            width=100,
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
+            border_color="#5a6268"
         )
-        self.delete_button.pack(side="left", padx=5)
+        self.delete_button.pack(side="left", padx=3)
 
         # Employee list frame
-        self.employee_list_frame = ctk.CTkFrame(self.parent_frame, fg_color="transparent")
-        self.employee_list_frame.pack(pady=10, padx=10, fill="both", expand=True)
+        self.employee_list_frame = ctk.CTkFrame(self.right_frame, fg_color="#ffffff", corner_radius=10, border_width=1, border_color="#e9ecef")
+        self.employee_list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Header table and search
+        self.header_table_frame = ctk.CTkFrame(self.employee_list_frame, fg_color="transparent")
+        self.header_table_frame.pack(fill="x", padx=10, pady=(5, 5))
+
+        self.header_table_text = ctk.CTkLabel(
+            self.header_table_frame,
+            text="Danh sách nhân viên",
+            font=("Arial", 16, "bold"),
+            text_color="#343a40"
+        )
+        self.header_table_text.pack(side="left", padx=10)
+
+        self.search_frame = ctk.CTkFrame(self.header_table_frame, fg_color="transparent")
+        self.search_frame.pack(side="right", padx=10)
+
+        self.search_entry = ctk.CTkEntry(
+            self.search_frame,
+            width=200,
+            font=("Arial", 13),
+            placeholder_text="Tìm theo ID hoặc tên...",
+            corner_radius=6,
+            border_width=1,
+            border_color="#ced4da"
+        )
+        self.search_entry.pack(side="left", padx=(0, 5))
+
+        self.search_button = ctk.CTkButton(
+            self.search_frame,
+            text="Tìm kiếm",
+            command=self.search_employee,
+            fg_color="#1a5f7a",
+            hover_color="#134b60",
+            width=100,
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
+            border_color="#134b60"
+        )
+        self.search_button.pack(side="left")
+
+        self.clear_search_button = ctk.CTkButton(
+            self.search_frame,
+            text="Cài lại",
+            command=self.clear_search,
+            fg_color="#6c757d",
+            hover_color="#5a6268",
+            width=100,
+            height=32,
+            font=("Arial", 14, "bold"),
+            corner_radius=8,
+            border_width=1,
+            border_color="#5a6268"
+        )
+        self.clear_search_button.pack(side="left", padx=(5, 0))
+
+        # Treeview styling
+        style = ttk.Style()
+        style.configure("Custom.Treeview",
+                        background="#ffffff",
+                        foreground="black",
+                        rowheight=32,
+                        fieldbackground="#ffffff",
+                        font=("Arial", 12))
+        style.configure("Custom.Treeview.Heading",
+                        background="#1a5f7a",
+                        foreground="black",
+                        font=("Arial", 13, "bold"),
+                        borderwidth=1,
+                        relief="flat")
+        style.map("Custom.Treeview",
+                  background=[('selected', 'black')],
+                  foreground=[('selected', 'white')])
+        style.map("Custom.Treeview.Heading",
+                  background=[('active', 'black')])
 
         # Treeview setup
-        columns = ("ID", "Họ tên", "Giới tính", "Năm sinh", "SĐT", "Email", "Vai trò", "Tên đăng nhập", "Trạng thái")
-        self.tree = ttk.Treeview(self.employee_list_frame, columns=columns, show="headings")
-        self.tree.pack(fill="both", expand=True)
+        columns = ("ID", "Họ tên", "Giới tính", "Năm sinh", "SĐT", "Email", "Vai trò", "Trạng thái")
+        self.tree = ttk.Treeview(self.employee_list_frame, columns=columns, show="headings", style="Custom.Treeview")
+        self.tree.pack(fill="both", expand=True, padx=10, pady=(5, 10))
 
         # Set column headings and widths
+        column_widths = {"ID": 60, "Họ tên": 130, "Giới tính": 80, "Năm sinh": 60, "SĐT": 100, "Email": 120, "Vai trò": 120, "Trạng thái": 80}
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=100)
+            self.tree.column(col, width=column_widths.get(col, 100), anchor="center")
 
         # Scrollbar
         scrollbar = ttk.Scrollbar(self.employee_list_frame, orient="vertical", command=self.tree.yview)
@@ -153,6 +239,35 @@ class EmployeeManagement:
         # Bind selection event
         self.tree.bind("<<TreeviewSelect>>", self.on_employee_select)
 
+    def search_employee(self):
+        """Search employees by ID or name"""
+        search_term = self.search_entry.get().strip().lower()
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            from controller.account_controller import AccountController
+            controller = AccountController(user_id=0)
+            employees = controller.get_all_accounts()
+            for emp in employees:
+                full_name = f"{emp['first_name']} {emp['last_name']}".lower()
+                emp_id = str(emp['id'])
+                if search_term in full_name or search_term in emp_id:
+                    self.tree.insert("", "end", values=(
+                        emp['id'], full_name.title(), emp['gender'], emp['birth_year'],
+                        emp['phone_number'], emp['email'], emp['role'].capitalize(),
+                        emp['activity']
+                    ))
+            if not self.tree.get_children():
+                messagebox.showinfo("Kết quả", "Không tìm thấy nhân viên phù hợp.")
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Lỗi khi tìm kiếm: {str(e)}")
+
+    def clear_search(self):
+        """Clear search entry and reload all employees"""
+        self.search_entry.delete(0, "end")
+        self.load_employees()
+
     def load_employees(self):
         """Load employee data into the Treeview"""
         for item in self.tree.get_children():
@@ -160,14 +275,14 @@ class EmployeeManagement:
 
         try:
             from controller.account_controller import AccountController
-            controller = AccountController(user_id=0)  # Temporary user_id for fetching data
+            controller = AccountController(user_id=0)
             employees = controller.get_all_accounts()
             for emp in employees:
                 full_name = f"{emp['first_name']} {emp['last_name']}"
                 self.tree.insert("", "end", values=(
                     emp['id'], full_name, emp['gender'], emp['birth_year'],
                     emp['phone_number'], emp['email'], emp['role'].capitalize(),
-                    emp['username'], emp['activity']
+                    emp['activity']
                 ))
         except Exception as e:
             messagebox.showerror("Lỗi", f"Lỗi khi tải danh sách nhân viên: {str(e)}")
@@ -190,41 +305,6 @@ class EmployeeManagement:
             self.phone_entry.insert(0, values[4])
             self.email_entry.insert(0, values[5])
             self.role_combo.set(values[6])
-            self.username_entry.insert(0, values[7])
-
-    def add_employee(self):
-        """Add a new employee"""
-        try:
-            from controller.account_controller import AccountController
-            first_name = self.first_name_entry.get().strip()
-            last_name = self.last_name_entry.get().strip()
-            username = self.username_entry.get().strip()
-            password = self.password_entry.get().strip()
-
-            if not all([first_name, last_name, username, password]):
-                messagebox.showerror("Lỗi", "Vui lòng điền đầy đủ Tên, Họ, Tên đăng nhập và Mật khẩu!")
-                return
-
-            controller = AccountController(user_id=0)
-            controller.add_account(
-                username=username,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                gender=self.gender_combo.get(),
-                phone_number=self.phone_entry.get().strip(),
-                email=self.email_entry.get().strip(),
-                birth_year=int(self.birth_year_entry.get()) if self.birth_year_entry.get().strip() else 0,
-                role=self.role_combo.get().lower(),
-                activity="pending"
-            )
-            messagebox.showinfo("Thành công", "Thêm nhân viên thành công")
-            self.load_employees()
-            self.clear_inputs()
-        except ValueError:
-            messagebox.showerror("Lỗi", "Năm sinh phải là số nguyên")
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Lỗi khi thêm nhân viên: {str(e)}")
 
     def update_employee(self):
         """Update selected employee's information"""
@@ -252,7 +332,6 @@ class EmployeeManagement:
                 phone_number=self.phone_entry.get().strip(),
                 email=self.email_entry.get().strip()
             )
-            # Update role separately
             conn = controller._get_connection()
             cursor = conn.cursor()
             query = "UPDATE users SET role = %s WHERE id = %s"
@@ -309,7 +388,7 @@ class EmployeeManagement:
             conn.commit()
             cursor.close()
             conn.close()
-            messagebox.showinfo("Thành công", "Đã duyệt tài khoản")
+            messagebox.showinfo("Thành công", "Đã kích hoạt thành công!")
             self.load_employees()
         except mysql.connector.Error as db_err:
             messagebox.showerror("Lỗi", f"Lỗi cơ sở dữ liệu: {str(db_err)}")
@@ -334,7 +413,7 @@ class EmployeeManagement:
             conn.commit()
             cursor.close()
             conn.close()
-            messagebox.showinfo("Thành công", "Đã từ chối tài khoản")
+            messagebox.showinfo("Thành công", "Đã hủy kích hoạt tài khoản!")
             self.load_employees()
         except mysql.connector.Error as db_err:
             messagebox.showerror("Lỗi", f"Lỗi cơ sở dữ liệu: {str(db_err)}")
@@ -348,7 +427,5 @@ class EmployeeManagement:
         self.birth_year_entry.delete(0, "end")
         self.phone_entry.delete(0, "end")
         self.email_entry.delete(0, "end")
-        self.username_entry.delete(0, "end")
-        self.password_entry.delete(0, "end")
         self.gender_combo.set("MALE")
         self.role_combo.set("Employee")
